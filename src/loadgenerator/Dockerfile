@@ -40,5 +40,9 @@ ENV GEVENT_SUPPORT=True
 # explicitly set a fallback log level in case no log level is defined by Kubernetes
 ENV LOG_LEVEL info
 
+RUN useradd --create-home --uid 1000 appuser
+
+USER 1000
+
 # start loadgenerator
-ENTRYPOINT locust --host="http://${FRONTEND_ADDR}" --loglevel $LOG_LEVEL --headless --users="${USERS:-10}" 2>&1
+ENTRYPOINT ["sh", "-c", "exec locust --host=\"http://${FRONTEND_ADDR}\" --loglevel \"$LOG_LEVEL\" --headless --users=\"${USERS:-10}\" 2>&1"]

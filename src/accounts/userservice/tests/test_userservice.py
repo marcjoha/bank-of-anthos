@@ -230,7 +230,7 @@ class TestUserservice(unittest.TestCase):
         # assert we get correct error message
         self.assertEqual(response.data, b'invalid login')
 
-    def test_login_non_existent_user_404_status_code_error_message(self):
+    def test_login_non_existent_user_401_status_code_error_message(self):
         """test logging in with a user that does not exist"""
         # mock return value of get_user which checks if user exists as None
         self.mocked_db.return_value.get_user.return_value = None
@@ -238,14 +238,11 @@ class TestUserservice(unittest.TestCase):
         example_user_request = EXAMPLE_USER_REQUEST.copy()
         example_user_request['username'] = 'foo'
         # send request to test client
-        response = self.test_app.get('/login', query_string=example_user_request)
-        # assert 404 response
-        self.assertEqual(response.status_code, 404)
-        # assert we get correct error message
-        self.assertEqual(
-            response.data,
-            'user {} does not exist'.format(example_user_request['username']).encode()
-        )
+        response = self.test_app.post('/login', json=example_user_request)
+        # assert 401 response to prevent username enumeration
+        self.assertEqual(response.status_code, 401)
+        # assert we get generic error message
+        self.assertEqual(response.data, b'invalid login')
 
     def test_create_user_400_status_code_invalid_username(self,):
         """test adding a contact with invalid labels """

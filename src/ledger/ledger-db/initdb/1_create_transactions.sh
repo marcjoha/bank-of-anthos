@@ -24,7 +24,7 @@ set -u
 
 
 # skip adding transactions if not enabled
-if [ -z "$USE_DEMO_DATA" ] && [ "$USE_DEMO_DATA" != "True"  ]; then
+if [ -z "$USE_DEMO_DATA" ] || [ "$USE_DEMO_DATA" != "True" ]; then
     echo "\$USE_DEMO_DATA not \"True\"; no demo transactions added"
     exit 0
 fi

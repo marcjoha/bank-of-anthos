@@ -17,7 +17,7 @@ db manages interactions with the underlying database
 """
 
 import logging
-import random
+import secrets
 from sqlalchemy import create_engine, MetaData, Table, Column, String, Date, LargeBinary
 from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 
@@ -70,7 +70,7 @@ class UserDb:
         accountid = None
         with self.engine.connect() as conn:
             while accountid is None:
-                accountid = str(random.randint(1_000_000_000, (10_000_000_000 - 1)))
+                accountid = str(secrets.randbelow(9_000_000_000) + 1_000_000_000)
 
                 statement = self.users_table.select().where(
                     self.users_table.c.accountid == accountid

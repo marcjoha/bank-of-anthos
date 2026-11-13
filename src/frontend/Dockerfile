@@ -38,7 +38,10 @@ ENV LOG_LEVEL info
 COPY . .
 
 # Ensure files are readable for non-root users
-RUN find . -type f -name '*' -exec chmod a+r '{}' ';'
+RUN find . -type f -name '*' -exec chmod a+r '{}' ';' \
+    && useradd --create-home --uid 1000 appuser
+
+USER 1000
 
 # Start server using gunicorn
-CMD gunicorn -b :$PORT --threads 4 --log-config logging.conf --log-level=$LOG_LEVEL "frontend:create_app()"
+CMD ["sh", "-c", "exec gunicorn -b :\"$PORT\" --threads 4 --log-config logging.conf --log-level=\"$LOG_LEVEL\" \"frontend:create_app()\""]

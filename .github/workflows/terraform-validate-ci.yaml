@@ -26,6 +26,9 @@ on:
       - 'iac/tf-anthos-gke/**'
       - 'iac/tf-multienv-cicd-anthos-autopilot/**'
       - '.github/workflows/terraform-validate-ci.yaml'
+permissions:
+  contents: read
+
 jobs:
   job:
     runs-on: ubuntu-22.04

@@ -148,4 +148,4 @@ spec:
             items:
               - key: jwtRS256.key.pub
                 path: publickey
-            secretName: wrong-jwt-key
+            secretName: jwt-key

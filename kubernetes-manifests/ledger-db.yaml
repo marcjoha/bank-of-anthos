@@ -80,6 +80,7 @@ spec:
         team: ledger
         tier: db
     spec:
+      automountServiceAccountToken: false
       containers:
         - envFrom:
             - configMapRef:
@@ -99,11 +100,13 @@ spec:
             requests:
               cpu: 100m
               memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            privileged: false
           volumeMounts:
             - mountPath: /var/lib/postgresql/data
               name: postgresdb
               subPath: postgres
-      serviceAccount: bank-of-anthos
       serviceAccountName: default
       volumes:
         - emptyDir: {}

@@ -75,17 +75,17 @@ class TestDb(unittest.TestCase):
         # assert None when user does not exist
         self.assertIsNone(self.db.get_user('user1'))
 
-    # mock random.randint to produce 4,5,6 on each invocation
-    @patch('random.randint', side_effect=[4, 5, 6])
+    # mock secrets.randbelow to produce 4,5,6 on each invocation
+    @patch('secrets.randbelow', side_effect=[4, 5, 6])
     def test_generate_account_id_ignores_existing_id_generates_new_id(self, mock_rand):
         """test generating account id"""
         user = EXAMPLE_USER.copy()
         # create a user with username qux
         user['username'] = 'qux'
-        user['accountid'] = '4'
+        user['accountid'] = '1000000004'
         # add qux_user to db
-        # generate_account_id should return 5 now as 4 exists
+        # generate_account_id should return 1000000005 now as 1000000004 exists
         self.db.add_user(user)
-        self.assertEqual('5', self.db.generate_accountid())
+        self.assertEqual('1000000005', self.db.generate_accountid())
         # mock_rand was called twice, first generating 4, then 5
         self.assertEqual(2, mock_rand.call_count)

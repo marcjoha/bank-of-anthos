@@ -16,4 +16,5 @@ FROM postgres:16.11-alpine@sha256:23e88eb049fd5d54894d70100df61d38a49ed97909263f
 
 # Files for initializing the database.
 COPY initdb/0-accounts-schema.sql initdb/1-load-testdata.sh /docker-entrypoint-initdb.d/
-RUN chmod 755 /docker-entrypoint-initdb.d/0-accounts-schema.sql /docker-entrypoint-initdb.d/1-load-testdata.sh 
+RUN chmod 644 /docker-entrypoint-initdb.d/0-accounts-schema.sql \
+    && chmod 755 /docker-entrypoint-initdb.d/1-load-testdata.sh

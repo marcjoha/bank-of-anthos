@@ -75,7 +75,10 @@ def create_app():
             token = ""
         try:
             auth_payload = jwt.decode(
-                token, key=app.config["PUBLIC_KEY"], algorithms="RS256"
+                token,
+                key=app.config["PUBLIC_KEY"],
+                algorithms=["RS256"],
+                options={"require": ["exp", "iat"]},
             )
             if username != auth_payload["user"]:
                 raise PermissionError
@@ -110,7 +113,10 @@ def create_app():
             token = ""
         try:
             auth_payload = jwt.decode(
-                token, key=app.config["PUBLIC_KEY"], algorithms="RS256"
+                token,
+                key=app.config["PUBLIC_KEY"],
+                algorithms=["RS256"],
+                options={"require": ["exp", "iat"]},
             )
             if username != auth_payload["user"]:
                 raise PermissionError
@@ -213,7 +219,8 @@ def create_app():
     # setup global variables
     app.config["VERSION"] = os.environ.get("VERSION")
     app.config["LOCAL_ROUTING"] = os.environ.get("LOCAL_ROUTING_NUM")
-    app.config["PUBLIC_KEY"] = open(os.environ.get("PUB_KEY_PATH"), "r").read()
+    with open(os.environ.get("PUB_KEY_PATH"), "r") as pub_key_file:
+        app.config["PUBLIC_KEY"] = pub_key_file.read()
 
     # Configure database connection
     try:

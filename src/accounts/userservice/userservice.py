@@ -86,7 +86,11 @@ def create_app():
         """
         try:
             app.logger.debug('Sanitizing input.')
-            req = {k: bleach.clean(v) for k, v in request.form.items()}
+            password_fields = {'password', 'password-repeat'}
+            req = {
+                k: (v if k in password_fields else bleach.clean(v))
+                for k, v in request.form.items()
+            }
             __validate_new_user(req)
             # Check if user already exists
             if users_db.get_user(req['username']) is not None:
@@ -132,7 +136,12 @@ def create_app():
         return jsonify({}), 201
 
     def __validate_new_user(req):
-        app.logger.debug('validating create user request: %s', str(req))
+        sensitive_fields = {'password', 'password-repeat', 'ssn'}
+        redacted = {
+            k: ('[REDACTED]' if k in sensitive_fields else v)
+            for k, v in req.items()
+        }
+        app.logger.debug('validating create user request: %s', str(redacted))
         # Check if required fields are filled
         fields = (
             'username',
@@ -159,7 +168,7 @@ def create_app():
         if not req['password'] == req['password-repeat']:
             raise UserWarning('passwords do not match')
 
-    @app.route('/login', methods=['GET'])
+    @app.route('/login', methods=['GET', 'POST'])
     def login():
         """Login a user and return a JWT token
 
@@ -172,15 +181,24 @@ def create_app():
         - password
         """
         app.logger.debug('Sanitizing login input.')
-        username = bleach.clean(request.args.get('username'))
-        password = bleach.clean(request.args.get('password'))
+        if request.method == 'POST':
+            data = request.get_json(silent=True) or request.form
+            raw_username = data.get('username')
+            password = data.get('password')
+        else:
+            raw_username = request.args.get('username')
+            password = request.args.get('password')
+
+        if not raw_username or not password:
+            return 'missing username or password', 400
+        username = bleach.clean(raw_username)
 
         # Get user data
         try:
             app.logger.debug('Getting the user data.')
             user = users_db.get_user(username)
             if user is None:
-                raise LookupError('user {} does not exist'.format(username))
+                raise PermissionError('invalid login')
 
             # Validate the password
             app.logger.debug('Validating the password.')
@@ -201,9 +219,6 @@ def create_app():
             app.logger.info('Login Successful.')
             return jsonify({'token': token}), 200
 
-        except LookupError as err:
-            app.logger.error('Error logging in: %s', str(err))
-            return str(err), 404
         except PermissionError as err:
             app.logger.error('Error logging in: %s', str(err))
             return str(err), 401
@@ -237,8 +252,10 @@ def create_app():
 
     app.config['VERSION'] = os.environ.get('VERSION')
     app.config['EXPIRY_SECONDS'] = int(os.environ.get('TOKEN_EXPIRY_SECONDS'))
-    app.config['PRIVATE_KEY'] = open(os.environ.get('PRIV_KEY_PATH'), 'r').read()
-    app.config['PUBLIC_KEY'] = open(os.environ.get('PUB_KEY_PATH'), 'r').read()
+    with open(os.environ.get('PRIV_KEY_PATH'), 'r') as priv_key_file:
+        app.config['PRIVATE_KEY'] = priv_key_file.read()
+    with open(os.environ.get('PUB_KEY_PATH'), 'r') as pub_key_file:
+        app.config['PUBLIC_KEY'] = pub_key_file.read()
 
     # Configure database connection
     try:
