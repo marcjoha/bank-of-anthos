@@ -38,6 +38,9 @@ ENV LOG_LEVEL info
 COPY . .
 
 # Ensure files are readable for non-root users
-RUN chmod a+r *
+RUN chmod a+r * \
+    && useradd --create-home --uid 1000 appuser
 
-CMD gunicorn -b :$PORT --threads 4 --log-config logging.conf --log-level=$LOG_LEVEL "contacts:create_app()"
+USER 1000
+
+CMD ["sh", "-c", "exec gunicorn -b :\"$PORT\" --threads 4 --log-config logging.conf --log-level=\"$LOG_LEVEL\" \"contacts:create_app()\""]

@@ -15,14 +15,14 @@ WORKDIR /e2e
 COPY . .
 
 # install curl and gpg which are needed for fetching the Google Cloud GPG key
-RUN apt-get update
-RUN apt-get install -y curl gpg
+RUN apt-get update && apt-get install -y --no-install-recommends curl gpg ca-certificates
 
 # install gcloud cli tools to get kubectl context and service/ingress endpoint ip to test
-RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key --keyring /usr/share/keyrings/cloud.google.gpg  add - && apt-get update -y && apt-get install google-cloud-cli -y
-
-# RUN apt-get update
-RUN apt-get install -y google-cloud-sdk-gke-gcloud-auth-plugin kubectl curl
+RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee /etc/apt/sources.list.d/google-cloud-sdk.list \
+    && curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg \
+    && apt-get update -y \
+    && apt-get install -y --no-install-recommends google-cloud-cli google-cloud-sdk-gke-gcloud-auth-plugin kubectl \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV USE_GKE_GCLOUD_AUTH_PLUGIN=True
 ENV XDG_CONFIG_HOME=/e2e

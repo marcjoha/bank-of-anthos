@@ -230,6 +230,8 @@ def create_app():
 
             user_input = request.form['amount']
             payment_amount = int(Decimal(user_input) * 100)
+            if payment_amount <= 0:
+                raise UserWarning("invalid payment amount")
             transaction_data = {"fromAccountNum": account_id,
                                 "fromRoutingNum": app.config['LOCAL_ROUTING'],
                                 "toAccountNum": recipient,
@@ -283,10 +285,8 @@ def create_app():
             if request.form['account'] == 'add':
                 external_account_num = request.form['external_account_num']
                 external_routing_num = request.form['external_routing_num']
-                if external_routing_num == app.config['LOCAL_ROUTING']:
-                    raise UserWarning("invalid routing number")
                 external_label = request.form.get('external_label', None)
-                if external_label:
+                if external_label and external_routing_num != app.config['LOCAL_ROUTING']:
                     # new contact. Add to contacts list
                     _add_contact(external_label,
                                  external_account_num,
@@ -297,11 +297,18 @@ def create_app():
                 external_account_num = account_details['account_num']
                 external_routing_num = account_details['routing_num']
 
+            if external_routing_num == app.config['LOCAL_ROUTING']:
+                raise UserWarning("invalid routing number")
+
+            deposit_amount = int(Decimal(request.form['amount']) * 100)
+            if deposit_amount <= 0:
+                raise UserWarning("invalid deposit amount")
+
             transaction_data = {"fromAccountNum": external_account_num,
                                 "fromRoutingNum": external_routing_num,
                                 "toAccountNum": account_id,
                                 "toRoutingNum": app.config['LOCAL_ROUTING'],
-                                "amount": int(Decimal(request.form['amount']) * 100),
+                                "amount": deposit_amount,
                                 "uuid": request.form['uuid']}
             _submit_transaction(transaction_data)
             app.logger.info('Deposit submitted successfully.')
@@ -313,6 +320,12 @@ def create_app():
 
         except requests.exceptions.RequestException as err:
             app.logger.error('Error submitting deposit: %s', str(err))
+        except (ValueError, DecimalException, json.JSONDecodeError, KeyError) as num_err:
+            app.logger.error('Error submitting deposit: %s', str(num_err))
+            return redirect(url_for('home',
+                                    msg='Deposit failed: invalid input',
+                                    _external=True,
+                                    _scheme=app.config['SCHEME']))
         except UserWarning as warn:
             app.logger.error('Error submitting deposit: %s', str(warn))
             msg = 'Deposit failed: {}'.format(str(warn))
@@ -439,12 +452,16 @@ def create_app():
                              request.form['password'],
                              request.args)
 
+    def _is_valid_redirect_uri(redirect_uri):
+        allowed_uri = os.environ.get('ALLOWED_OAUTH_REDIRECT_URI')
+        return bool(redirect_uri and allowed_uri and redirect_uri == allowed_uri)
+
     def _login_helper(username, password, request_args):
         try:
             app.logger.debug('Logging in.')
-            req = requests.get(url=app.config["LOGIN_URI"],
-                               params={'username': username, 'password': password},
-                               timeout=app.config['BACKEND_TIMEOUT']*2)
+            req = requests.post(url=app.config["LOGIN_URI"],
+                                json={'username': username, 'password': password},
+                                timeout=app.config['BACKEND_TIMEOUT']*2)
             req.raise_for_status()  # Raise on HTTP Status code 4XX or 5XX
 
             # login success
@@ -456,17 +473,24 @@ def create_app():
                 'state' in request_args and
                 'redirect_uri' in request_args and
                     request_args['response_type'] == 'code'):
+                if not _is_valid_redirect_uri(request_args['redirect_uri']):
+                    return abort(400)
                 resp = make_response(redirect(url_for('consent',
                                                       state=request_args['state'],
                                                       redirect_uri=request_args['redirect_uri'],
-                                                      app_name=request_args['app_name'],
+                                                      app_name=request_args.get('app_name', ''),
                                                       _external=True,
                                                       _scheme=app.config['SCHEME'])))
             else:
                 resp = make_response(redirect(url_for('home',
                                                       _external=True,
                                                       _scheme=app.config['SCHEME'])))
-            resp.set_cookie(app.config['TOKEN_NAME'], token, max_age=max_age)
+            resp.set_cookie(app.config['TOKEN_NAME'],
+                            token,
+                            max_age=max_age,
+                            httponly=True,
+                            secure=(app.config['SCHEME'] == 'https'),
+                            samesite='Lax')
             app.logger.info('Successfully logged in.')
             return resp
         except (RequestException, HTTPError) as err:
@@ -484,6 +508,8 @@ def create_app():
         already logged in and consented.
         """
         redirect_uri = request.args.get('redirect_uri')
+        if not _is_valid_redirect_uri(redirect_uri):
+            return abort(400)
         state = request.args.get('state')
         app_name = request.args.get('app_name')
         token = request.cookies.get(app.config['TOKEN_NAME'])
@@ -519,9 +545,11 @@ def create_app():
         """
         Check consent, write cookie if yes, and redirect accordingly
         """
-        consent = request.args['consent']
-        state = request.args['state']
-        redirect_uri = request.args['redirect_uri']
+        consent = request.args.get('consent')
+        state = request.args.get('state')
+        redirect_uri = request.args.get('redirect_uri')
+        if not _is_valid_redirect_uri(redirect_uri):
+            return abort(400)
         token = request.cookies.get(app.config['TOKEN_NAME'])
 
         app.logger.debug('Checking consent. consent: %s', consent)
@@ -529,13 +557,19 @@ def create_app():
         if consent == "true":
             app.logger.info('User consent granted.')
             resp = _auth_callback_helper(state, redirect_uri, token)
-            resp.set_cookie(app.config['CONSENT_COOKIE'], 'true')
+            resp.set_cookie(app.config['CONSENT_COOKIE'],
+                            'true',
+                            httponly=True,
+                            secure=(app.config['SCHEME'] == 'https'),
+                            samesite='Lax')
         else:
             app.logger.info('User consent denied.')
             resp = make_response(redirect(redirect_uri + '#error=access_denied', 302))
         return resp
 
     def _auth_callback_helper(state, redirect_uri, token):
+        if not _is_valid_redirect_uri(redirect_uri):
+            return abort(400)
         try:
             app.logger.debug('Retrieving authorization code.')
             callback_response = requests.post(url=redirect_uri,
@@ -614,7 +648,7 @@ def create_app():
         return resp
 
     def decode_token(token):
-        return jwt.decode(algorithms='RS256',
+        return jwt.decode(algorithms=['RS256'],
                           jwt=token,
                           options={"verify_signature": False})
 
@@ -626,10 +660,10 @@ def create_app():
         if token is None:
             return False
         try:
-            jwt.decode(algorithms='RS256',
+            jwt.decode(algorithms=['RS256'],
                        jwt=token,
                        key=app.config['PUBLIC_KEY'],
-                       options={"verify_signature": True})
+                       options={"verify_signature": True, "require": ["exp", "iat"]})
             app.logger.debug('Token verified.')
             return True
         except jwt.exceptions.InvalidTokenError as err:
@@ -671,7 +705,8 @@ def create_app():
         os.environ.get('USERSERVICE_API_ADDR'))
     app.config["CONTACTS_URI"] = 'http://{}/contacts'.format(
         os.environ.get('CONTACTS_API_ADDR'))
-    app.config['PUBLIC_KEY'] = open(os.environ.get('PUB_KEY_PATH'), 'r').read()
+    with open(os.environ.get('PUB_KEY_PATH'), 'r') as pub_key_file:
+        app.config['PUBLIC_KEY'] = pub_key_file.read()
     app.config['LOCAL_ROUTING'] = os.getenv('LOCAL_ROUTING_NUM')
     # timeout in seconds for calls to the backend
     app.config['BACKEND_TIMEOUT'] = int(os.getenv('BACKEND_TIMEOUT', '4'))

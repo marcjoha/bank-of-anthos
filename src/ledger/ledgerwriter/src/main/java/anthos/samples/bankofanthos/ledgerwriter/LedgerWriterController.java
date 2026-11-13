@@ -135,10 +135,10 @@ public final class LedgerWriterController {
             @RequestHeader("Authorization") String bearerToken,
             @RequestBody Transaction transaction) {
         if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
-            bearerToken = bearerToken.split("Bearer ")[1];
+            bearerToken = bearerToken.substring(7);
         }
         try {
-            if (bearerToken == null) {
+            if (bearerToken == null || bearerToken.isEmpty()) {
                 LOGGER.error("Transaction submission failed: "
                     + "Authorization header null");
                 throw new IllegalArgumentException(
@@ -147,7 +147,9 @@ public final class LedgerWriterController {
             final DecodedJWT jwt = this.verifier.verify(bearerToken);
 
             // Check against cache for duplicate transactions
-            if (this.cache.asMap().containsKey(transaction.getRequestUuid())) {
+            final String requestUuid = transaction.getRequestUuid();
+            if (requestUuid != null && !requestUuid.isEmpty()
+                    && this.cache.asMap().containsKey(requestUuid)) {
                 throw new IllegalStateException(
                         EXCEPTION_MESSAGE_DUPLICATE_TRANSACTION);
             }
@@ -169,8 +171,9 @@ public final class LedgerWriterController {
 
             // No exceptions thrown. Add to ledger
             transactionRepository.save(transaction);
-            this.cache.put(transaction.getRequestUuid(),
-                    transaction.getTransactionId());
+            if (requestUuid != null && !requestUuid.isEmpty()) {
+                this.cache.put(requestUuid, transaction.getTransactionId());
+            }
             LOGGER.info("Submitted transaction successfully");
             return new ResponseEntity<>(READINESS_CODE,
                     HttpStatus.CREATED);
@@ -212,9 +215,12 @@ public final class LedgerWriterController {
         headers.set("Authorization", "Bearer " + token);
         HttpEntity entity = new HttpEntity(headers);
         String uri = balancesApiUri + "/" + fromAcct;
-        ResponseEntity<Integer> response = restTemplate.exchange(
-            uri, HttpMethod.GET, entity, Integer.class);
-        Integer senderBalance = response.getBody();
+        ResponseEntity<Long> response = restTemplate.exchange(
+            uri, HttpMethod.GET, entity, Long.class);
+        Long senderBalance = response.getBody();
+        if (senderBalance == null) {
+            throw new IllegalStateException("Balance response body is null");
+        }
         return senderBalance.intValue();
     }
 }

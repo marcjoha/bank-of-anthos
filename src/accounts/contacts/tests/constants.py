@@ -17,6 +17,7 @@ Example constants used in tests
 """
 import random
 import string
+import time
 from Crypto.PublicKey import RSA
 import jwt
 
@@ -35,7 +36,13 @@ EXAMPLE_PRIVATE_KEY, EXAMPLE_PUBLIC_KEY = generate_rsa_key()
 
 EXAMPLE_USER = "foo"
 
-EXAMPLE_USER_PAYLOAD = {"user": EXAMPLE_USER, "acct": "1234512345"}
+_NOW = int(time.time())
+EXAMPLE_USER_PAYLOAD = {
+    "user": EXAMPLE_USER,
+    "acct": "1234512345",
+    "iat": _NOW,
+    "exp": _NOW + 3600,
+}
 
 EXAMPLE_TOKEN = jwt.encode(
     EXAMPLE_USER_PAYLOAD, EXAMPLE_PRIVATE_KEY, algorithm="RS256"

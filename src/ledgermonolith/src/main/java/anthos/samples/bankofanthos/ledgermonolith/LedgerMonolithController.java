@@ -233,7 +233,7 @@ public final class LedgerMonolithController {
             @RequestHeader("Authorization") String bearerToken,
             @RequestBody Transaction transaction) {
         if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
-            bearerToken = bearerToken.split("Bearer ")[1];
+            bearerToken = bearerToken.substring(7);
         }
         try {
             if (bearerToken == null) {
@@ -245,7 +245,9 @@ public final class LedgerMonolithController {
             final DecodedJWT jwt = this.verifier.verify(bearerToken);
 
             // Check against cache for duplicate transactions
-            if (this.ledgerWriterCache.asMap().containsKey(transaction.getRequestUuid())) {
+            final String requestUuid = transaction.getRequestUuid();
+            if (requestUuid != null && !requestUuid.isEmpty()
+                    && this.ledgerWriterCache.asMap().containsKey(requestUuid)) {
                 throw new IllegalStateException(
                         EXCEPTION_MESSAGE_DUPLICATE_TRANSACTION);
             }
@@ -263,10 +265,13 @@ public final class LedgerMonolithController {
                             EXCEPTION_MESSAGE_INSUFFICIENT_BALANCE);
                 }
             }
+
             // No exceptions thrown. Add to ledger
             transactionRepository.save(transaction);
-            this.ledgerWriterCache.put(transaction.getRequestUuid(),
-                    transaction.getTransactionId());
+            if (requestUuid != null && !requestUuid.isEmpty()) {
+                this.ledgerWriterCache.put(requestUuid,
+                        transaction.getTransactionId());
+            }
             LOGGER.info("Submitted transaction successfully");
             return new ResponseEntity<>(READINESS_CODE,
                     HttpStatus.CREATED);
@@ -324,7 +329,7 @@ public final class LedgerMonolithController {
         @PathVariable String accountId) {
 
         if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
-            bearerToken = bearerToken.split("Bearer ")[1];
+            bearerToken = bearerToken.substring(7);
         }
         try {
             DecodedJWT jwt = verifier.verify(bearerToken);
@@ -368,7 +373,7 @@ public final class LedgerMonolithController {
             @PathVariable String accountId) {
 
         if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
-            bearerToken = bearerToken.split("Bearer ")[1];
+            bearerToken = bearerToken.substring(7);
         }
         try {
             DecodedJWT jwt = verifier.verify(bearerToken);

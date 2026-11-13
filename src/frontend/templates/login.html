@@ -51,7 +51,7 @@ limitations under the License.
                     <span class="error-icon mr-2 material-icons">error</span>Login failed.
                   </div>
                   {% if response_type == "code" %}
-                  <form id="login-form" class="needs-validation" novalidate="" method="POST" action="/login?response_type={{ response_type }}&state={{ state }}&redirect_uri={{ redirect_uri }}&app_name={{ app_name }}">
+                  <form id="login-form" class="needs-validation" novalidate="" method="POST" action="/login?response_type={{ response_type|urlencode }}&state={{ state|urlencode }}&redirect_uri={{ redirect_uri|urlencode }}&app_name={{ app_name|urlencode }}">
                   {% else %}
                   <form id="login-form" class="needs-validation" novalidate="" method="POST" action="/login">
                   {% endif %}
